@@ -17,7 +17,10 @@ class DatabaseIsolationTest {
     @Test
     @DisplayName("Payment Service configuration must only use paymentdb and never other microservice databases")
     void testPaymentServiceDatabaseIsolation() throws Exception {
-        Path configPath = Paths.get("../config-repo/payment-service.yml");
+        Path configPath = Paths.get("../../config-repo/payment-service.yml");
+        if (!Files.exists(configPath)) {
+            configPath = Paths.get("../config-repo/payment-service.yml");
+        }
         if (!Files.exists(configPath)) {
             configPath = Paths.get("config-repo/payment-service.yml");
         }
@@ -32,6 +35,7 @@ class DatabaseIsolationTest {
             assertThat(rawYaml).doesNotContain("userdb");
             assertThat(rawYaml).doesNotContain("fooddb");
             assertThat(rawYaml).doesNotContain("orderdb");
+            assertThat(rawYaml).doesNotContain("notificationdb");
         }
     }
 }

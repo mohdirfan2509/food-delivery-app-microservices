@@ -5,7 +5,11 @@
 **Architecture**: Cloud-Native Spring Boot Microservices  
 **Runtime**: Java 21 LTS | Spring Boot 3.3.4 | Spring Cloud 2023.0.3  
 
-This project is an academic multi-module microservices application modeling a production-grade online food ordering and delivery management system. The architecture implements decentralized microservice patterns, database-per-service isolation, centralized configuration management, an API reverse proxy gateway, Redis catalog caching, OpenFeign declarative inter-service communication, and asynchronous event-driven notifications powered by Apache Kafka (KRaft).
+This project is an academic multi-module microservices application modeling a production-grade online food ordering and delivery management system. The architecture implements decentralized microservice patterns, database-per-service isolation, centralized externalized configuration management via Spring Cloud Config Server backed by a dedicated GitHub repository, an API reverse proxy gateway, Redis catalog caching, OpenFeign declarative inter-service communication, and asynchronous event-driven notifications powered by Apache Kafka (KRaft).
+
+### Repositories
+- **Main Application Repository**: `https://github.com/mohdirfan2509/food-delivery-app-microservices`
+- **Separate Configuration Repository**: `https://github.com/mohdirfan2509/config-repo`
 
 ---
 
@@ -28,7 +32,7 @@ This project is an academic multi-module microservices application modeling a pr
 ┌──────────────┐   ┌────────────┐┌────────────┐ ┌─────────────┐   ┌─────────────────┐
 │ User Service │   │Food Service││Order Service││Payment Service│  │Notification Svc │
 │    :8081     │   │   :8082    ││   :8083    │ │    :8084    │   │      :8085      │
-└──────┬───────┘   └─────┬──────┘└─────┬──────┘ └──────┬──────┘   └────────┬────────┘
+└──────┬───────┘   └────┬───────┘└────┬───────┘ └──────┬──────┘   └────────┬────────┘
        │                 │             │               │                   ▲
        ▼                 ▼             │ Feign         ▼                   │ Kafka
      userdb            fooddb          ├───► Food Svc  paymentdb           │ order-created
@@ -66,8 +70,9 @@ This project is an academic multi-module microservices application modeling a pr
 
 ---
 
-## 4. Repository Module Structure
+## 4. Repository & Module Structure
 
+### 4.1 Main Application Repository (`food-delivery-app-microservices`)
 ```
 food-delivery-app-microservices/
 ├── pom.xml                               # Root Maven parent aggregator POM
@@ -75,20 +80,12 @@ food-delivery-app-microservices/
 ├── .env.example                          # Environment variable template
 ├── init-scripts/
 │   └── 01-init-databases.sql             # SQL script initializing the 5 separate schemas
-├── config-repo/                          # Centralized Git/file repository served by Config Server
-│   ├── application.yml                   # Global shared settings (JWT secrets, Kafka broker)
-│   ├── api-gateway.yml                   # Gateway routes, CORS, actuator
-│   ├── user-service.yml                  # User Service datasource & admin seed config
-│   ├── food-service.yml                  # Food Service datasource & Redis cache settings
-│   ├── order-service.yml                 # Order Service datasource, Feign targets, Kafka topic
-│   ├── payment-service.yml               # Payment Service datasource
-│   └── notification-service.yml          # Notification Service datasource, Kafka consumer group
 ├── common-dto/                           # Reusable cross-service DTOs and Kafka events ONLY
 │   └── src/main/java/com/fooddelivery/common/
 │       ├── dto/                          # PaymentRequest, PaymentResponse
 │       ├── enums/                        # PaymentStatus
 │       └── event/                        # OrderCreatedEvent
-├── config-server/                        # Spring Cloud Config Server (:8888)
+├── config-server/                        # Spring Cloud Config Server (:8888, Git-backed)
 ├── api-gateway/                          # Spring Cloud Gateway (:8080)
 ├── user-service/                         # Customer & Admin authentication (:8081)
 ├── food-service/                         # Restaurant & Food catalog with Redis cache (:8082)
@@ -97,13 +94,69 @@ food-delivery-app-microservices/
 └── notification-service/                 # Kafka event consumer & notification repository (:8085)
 ```
 
+### 4.2 Separate Configuration Repository (`config-repo`)
+Hosted at **`https://github.com/mohdirfan2509/config-repo`**:
+```
+config-repo/
+├── README.md                             # Configuration repository purpose and documentation
+├── application.yml                       # Global shared properties (logging, common actuator, JWT)
+├── api-gateway.yml                       # Gateway routing table, CORS policy, management endpoints
+├── user-service.yml                      # User Service datasource, JPA, initial seed admin
+├── food-service.yml                      # Food Service datasource, Redis cache connection & TTL
+├── order-service.yml                     # Order Service datasource, OpenFeign URLs, Kafka topic
+├── payment-service.yml                   # Payment Service datasource, JPA
+└── notification-service.yml              # Notification Service datasource, Kafka consumer group
+```
+
 ---
 
-## 5. Microservice Responsibilities, Ports & Databases
+## 5. Centralized Configuration Architecture (Spring Cloud Config Server)
+
+```
+GitHub config-repo (https://github.com/mohdirfan2509/config-repo)
+        │
+        │ Git clone / pull over HTTPS
+        ▼
+Spring Cloud Config Server :8888 (No database)
+        │
+        ├───► api-gateway          (:8080)
+        ├───► user-service         (:8081)
+        ├───► food-service         (:8082)
+        ├───► order-service        (:8083)
+        ├───► payment-service      (:8084)
+        └───► notification-service (:8085)
+```
+
+> [!IMPORTANT]
+> **Config Server does not use a database. It retrieves centralized configuration from the external Git repository.**
+
+### Key Design Principles:
+1. **Git Backend**: Config Server is configured with the Git backend pointing to `https://github.com/mohdirfan2509/config-repo.git` on branch `main` with `clone-on-start: true`.
+2. **Independent Repository**: The configuration repository is completely decoupled from the main code repository. No application code, build scripts, or secrets are stored in `config-repo`.
+3. **No Secrets Committed**: Sensitive configuration values (passwords, JWT secret tokens, database credentials) use environment variable references (`${USER_DB_PASSWORD}`, `${JWT_SECRET}`) so version control remains clean.
+4. **How Services Obtain Configuration**: Each microservice points to Config Server on startup via Spring Boot 3 config import:
+   ```yaml
+   spring:
+     config:
+       import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+   ```
+5. **Config Server Actuator & Retrieval Endpoints**:
+   - Health check: `http://localhost:8888/actuator/health`
+   - Service profiles:
+     - `http://localhost:8888/user-service/default`
+     - `http://localhost:8888/food-service/default`
+     - `http://localhost:8888/order-service/default`
+     - `http://localhost:8888/payment-service/default`
+     - `http://localhost:8888/notification-service/default`
+     - `http://localhost:8888/api-gateway/default`
+
+---
+
+## 6. Microservice Responsibilities, Ports & Databases
 
 | Service | Port | Bounded Context / Responsibility | Database / Schema | Direct Storage Access |
 |---|---|---|---|---|
-| **Config Server** | `8888` | Externalized centralized configuration management | None (File-based repo) | N/A |
+| **Config Server** | `8888` | Centralized externalized configuration management | None (External Git repo) | N/A |
 | **API Gateway** | `8080` | Unified client entry point, routing, CORS, header forwarding | None | N/A |
 | **User Service** | `8081` | Customer registration, login, JWT token issuing, profile RBAC | `userdb` | MySQL `3307` |
 | **Food Service** | `8082` | Restaurant & food catalog CRUD, public browsing, Redis caching | `fooddb` + Redis | MySQL `3307` / Redis `6380` |
@@ -116,34 +169,34 @@ food-delivery-app-microservices/
 
 ---
 
-## 6. End-to-End Business Workflows
+## 7. End-to-End Business Workflows
 
-### 6.1 Authentication & Authorization Flow
+### 7.1 Authentication & Authorization Flow
 1. **Public Registration**: `POST /users/register` accepts customer details and automatically assigns role `ROLE_CUSTOMER`. Public registration cannot assign `ADMIN`.
 2. **Seed Admin**: An initial administrator (`admin@foodapp.com` / `Admin@1234`) is seeded automatically on startup.
 3. **Stateless JWT**: Upon successful `POST /users/login`, the service generates an HMAC-SHA256 signed JWT containing `sub` (email), `customerId`, and `role`.
 4. **Gateway Forwarding**: Client sends `Authorization: Bearer <JWT>` to `http://localhost:8080`. Gateway forwards the header unmodified to downstream microservices.
 5. **Decentralized Verification**: Each microservice independently parses and validates the JWT signature, enforcing role-based permissions (`CUSTOMER` vs `ADMIN`) and customer data ownership.
 
-### 6.2 Order Lifecycle & Distributed Flow
+### 7.2 Order Lifecycle & Distributed Flow
 ```
 Customer                    API Gateway               Order Service             Food Service          Payment Service         Kafka Broker         Notification Svc
    │                             │                          │                         │                      │                      │                     │
-   │─── POST /orders (JWT) ─────►│                          │                         │                      │                      │                     │
+   │─── POST /orders (JWT) ──────►│                          │                         │                      │                      │                     │
    │                             │─── Forward POST ────────►│                         │                      │                      │                     │
-   │                             │                          │─── GET /foods/{id} ────►│                      │                      │                     │
+   │                             │                          ├─── GET /foods/{id} ────►│                      │                      │                     │
    │                             │                          │    (Authoritative Price)│                      │                      │                     │
    │                             │                          │◄── Food DTO ────────────│                      │                      │                     │
    │                             │                          │                                                │                      │                     │
-   │                             │                          │─── POST /payments (Feign) ────────────────────►│                      │                     │
+   │                             │                          ├─── POST /payments (Feign) ────────────────────►│                      │                     │
    │                             │                          │◄── Payment SUCCESS ────────────────────────────│                      │                     │
    │                             │                          │                                                                       │                     │
-   │                             │                          │─── Persist Order (CONFIRMED) in orderdb                               │                     │
-   │                             │                          │─── Publish OrderCreatedEvent ────────────────────────────────────────►│                     │
+   │                             │                          ├─── Persist Order (CONFIRMED) in orderdb                               │                     │
+   │                             │                          ├─── Publish OrderCreatedEvent ────────────────────────────────────────►│                     │
    │                             │◄── 201 Created (Order) ──│                                                                       │                     │
-   │◄── 201 Created ─────────────│                          │                                                                       │─── Consume Event ──►│
+   │◄── 201 Created ─────────────│                          │                                                                       ├─── Consume Event ──►│
    │                             │                          │                                                                       │    (order-created)  │
-   │                             │                          │                                                                       │                     │── Persist in
+   │                             │                          │                                                                       │                     │─── Persist in
    │                             │                          │                                                                       │                        notificationdb
 ```
 
@@ -157,7 +210,7 @@ Customer                    API Gateway               Order Service             
 
 ---
 
-## 7. API Routing & Gateway Endpoint Matrix
+## 8. API Routing & Gateway Endpoint Matrix
 
 All external traffic enters through API Gateway at **`http://localhost:8080`**.
 
@@ -192,15 +245,15 @@ All external traffic enters through API Gateway at **`http://localhost:8080`**.
 
 ---
 
-## 8. Development Setup & Execution Instructions
+## 9. Development Setup & Execution Instructions
 
-### 8.1 Prerequisites
+### 9.1 Prerequisites
 - **Java**: OpenJDK 21 LTS (`java -version` returns 21)
 - **Maven**: Version 3.9+ (`mvn -version`)
 - **Docker & Docker Compose**: Docker 24+ and Docker Compose v2+
 - **Terminal & Utilities**: `curl`, `jq` (optional for JSON formatting)
 
-### 8.2 Step 1: Start Infrastructure Containers
+### 9.2 Step 1: Start Infrastructure Containers
 Start the multi-tenant MySQL 8.4, Redis 7.2, and Apache Kafka 3.7.1 containers:
 ```bash
 docker compose up -d
@@ -210,22 +263,28 @@ Verify container health:
 docker compose ps
 # Output should show food-delivery-mysql, food-delivery-redis, food-delivery-kafka as (healthy)
 ```
+> [!NOTE]
+> Docker Compose strictly manages persistent backing infrastructure. It does NOT mount or contain configuration files. Config Server independently pulls configuration directly from GitHub over HTTPS.
 
-### 8.3 Step 2: Build All Modules
+### 9.3 Step 2: Build All Modules
 Compile and package the entire multi-module reactor:
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 8.4 Step 3: Launch Microservices in Required Order
+### 9.4 Step 3: Launch Microservices in Required Order
 Start each microservice in sequence. Ensure **Config Server** is running before the application services:
 
 ```bash
-# 1. Config Server (Port 8888)
+# 1. Config Server (Port 8888) - Clones config from GitHub
 java -jar config-server/target/config-server-1.0.0-SNAPSHOT.jar &
 
-# Wait 5 seconds for Config Server to start
+# Wait 5 seconds for Config Server to initialize and clone config-repo
 sleep 5
+
+# Verify Config Server Health and GitHub Config Retrieval
+curl -s http://localhost:8888/actuator/health | jq .status
+curl -s http://localhost:8888/user-service/default | jq .name
 
 # 2. User Service (Port 8081)
 java -jar user-service/target/user-service-1.0.0-SNAPSHOT.jar &
@@ -246,7 +305,7 @@ java -jar notification-service/target/notification-service-1.0.0-SNAPSHOT.jar &
 java -jar api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar &
 ```
 
-### 8.5 Step 4: Verify Actuator Health Endpoints
+### 9.5 Step 4: Verify Actuator Health Endpoints
 ```bash
 curl -s http://localhost:8888/actuator/health | jq .status   # "UP"
 curl -s http://localhost:8081/actuator/health | jq .status   # "UP"
@@ -259,7 +318,7 @@ curl -s http://localhost:8080/actuator/health | jq .status   # "UP"
 
 ---
 
-## 9. Comprehensive End-to-End Verification Demo
+## 10. Comprehensive End-to-End Verification Demo
 
 ### Demo Credentials
 - **Development Admin**: `admin@foodapp.com` | Password: `Admin@1234`
@@ -363,7 +422,7 @@ curl -i -X OPTIONS http://localhost:8080/orders \
 
 ---
 
-## 10. Automated Testing & Verification Suite
+## 11. Automated Testing & Verification Suite
 
 To run all automated regression tests across all 8 modules:
 ```bash
@@ -372,7 +431,7 @@ mvn clean test
 
 ### Test Count Breakdown (178 Tests Total)
 - `common-dto`: 1 test (JSON serialization & validation)
-- `config-server`: 1 test (Context load & configuration locator)
+- `config-server`: 1 test (Context load & Git configuration locator offline)
 - `user-service`: 57 tests (Authentication, BCrypt hashing, JWT provider, RBAC, ownership, DatabaseIsolation)
 - `food-service`: 43 tests (CRUD, Redis cache hit/miss, cache eviction, DatabaseIsolation)
 - `payment-service`: 26 tests (Payment state machine, idempotency, validation, DatabaseIsolation)
@@ -384,7 +443,7 @@ mvn clean test
 
 ---
 
-## 11. Security Architecture Summary
+## 12. Security Architecture Summary
 
 ```
                       Client
@@ -411,9 +470,10 @@ mvn clean test
 
 ---
 
-## 12. Troubleshooting & Diagnostics
+## 13. Troubleshooting & Diagnostics
 
 - **Docker Containers Not Healthy**: Run `docker compose ps`. If Kafka or MySQL failed to bind, ensure host ports `3307`, `6380`, and `9092` are not occupied by local native services.
-- **Microservice Fails to Fetch Config**: Ensure Config Server (`:8888`) is running and healthy prior to starting microservices. Check `curl http://localhost:8888/actuator/health`.
+- **Config Server Fails to Clone from GitHub**: Verify internet connectivity or check `CONFIG_REPO_GIT_URI` in `.env`. Check health via `curl http://localhost:8888/actuator/health`.
+- **Microservice Fails to Fetch Config**: Ensure Config Server (`:8888`) is running and healthy prior to starting microservices. Check `curl http://localhost:8888/user-service/default`.
 - **Database Connection Refused**: Confirm services connect to port `3307` (`MYSQL_PORT=3307`), which maps to MySQL in Docker.
 - **Port Conflicts**: Run `ss -tulpn | grep -E "8888|8080|8081|8082|8083|8084|8085"` to check for existing processes. Kill with `pkill -f "SNAPSHOT.jar"`.

@@ -17,7 +17,10 @@ class DatabaseIsolationTest {
     @Test
     @DisplayName("Order Service configuration must only use orderdb and never other microservice databases")
     void testOrderServiceDatabaseIsolation() throws Exception {
-        Path configPath = Paths.get("../config-repo/order-service.yml");
+        Path configPath = Paths.get("../../config-repo/order-service.yml");
+        if (!Files.exists(configPath)) {
+            configPath = Paths.get("../config-repo/order-service.yml");
+        }
         if (!Files.exists(configPath)) {
             configPath = Paths.get("config-repo/order-service.yml");
         }
@@ -32,6 +35,7 @@ class DatabaseIsolationTest {
             assertThat(rawYaml).doesNotContain("userdb");
             assertThat(rawYaml).doesNotContain("fooddb");
             assertThat(rawYaml).doesNotContain("paymentdb");
+            assertThat(rawYaml).doesNotContain("notificationdb");
         }
     }
 }

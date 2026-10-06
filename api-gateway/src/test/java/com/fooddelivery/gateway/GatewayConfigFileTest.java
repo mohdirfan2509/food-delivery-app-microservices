@@ -17,7 +17,10 @@ class GatewayConfigFileTest {
     @Test
     @DisplayName("Verify config-repo/api-gateway.yml configuration completeness and isolation")
     void testGatewayConfigVerification() throws Exception {
-        Path configPath = Paths.get("../config-repo/api-gateway.yml");
+        Path configPath = Paths.get("../../config-repo/api-gateway.yml");
+        if (!Files.exists(configPath)) {
+            configPath = Paths.get("../config-repo/api-gateway.yml");
+        }
         if (!Files.exists(configPath)) {
             configPath = Paths.get("config-repo/api-gateway.yml");
         }

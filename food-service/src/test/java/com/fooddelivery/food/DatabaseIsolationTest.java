@@ -17,7 +17,10 @@ class DatabaseIsolationTest {
     @Test
     @DisplayName("Food Service configuration must only use fooddb and never other microservice databases")
     void testFoodServiceDatabaseIsolation() throws Exception {
-        Path configPath = Paths.get("../config-repo/food-service.yml");
+        Path configPath = Paths.get("../../config-repo/food-service.yml");
+        if (!Files.exists(configPath)) {
+            configPath = Paths.get("../config-repo/food-service.yml");
+        }
         if (!Files.exists(configPath)) {
             configPath = Paths.get("config-repo/food-service.yml");
         }
@@ -32,6 +35,7 @@ class DatabaseIsolationTest {
             assertThat(rawYaml).doesNotContain("userdb");
             assertThat(rawYaml).doesNotContain("orderdb");
             assertThat(rawYaml).doesNotContain("paymentdb");
+            assertThat(rawYaml).doesNotContain("notificationdb");
         }
     }
 }

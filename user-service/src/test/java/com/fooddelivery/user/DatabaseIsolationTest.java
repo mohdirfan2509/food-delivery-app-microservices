@@ -17,7 +17,10 @@ class DatabaseIsolationTest {
     @Test
     @DisplayName("User Service configuration must only use userdb and never other microservice databases")
     void testUserServiceDatabaseIsolation() throws Exception {
-        Path configPath = Paths.get("../config-repo/user-service.yml");
+        Path configPath = Paths.get("../../config-repo/user-service.yml");
+        if (!Files.exists(configPath)) {
+            configPath = Paths.get("../config-repo/user-service.yml");
+        }
         if (!Files.exists(configPath)) {
             configPath = Paths.get("config-repo/user-service.yml");
         }

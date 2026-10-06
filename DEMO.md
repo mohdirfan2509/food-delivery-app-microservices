@@ -2,11 +2,14 @@
 
 This document provides a streamlined, step-by-step walkthrough to demonstrate the **Online Food Ordering & Delivery Management System** microservices to an evaluator.
 
+Centralized Configuration Repository: **`https://github.com/mohdirfan2509/config-repo`**  
+Main Application Repository: **`https://github.com/mohdirfan2509/food-delivery-app-microservices`**
+
 ---
 
-## 1. Quick Startup (Pre-requisites Running)
+## 1. Quick Startup Sequence
 
-### A. Start Docker Infrastructure
+### Step 1: Start Docker Infrastructure
 ```bash
 docker compose up -d
 # Wait 10 seconds and verify health
@@ -14,35 +17,47 @@ docker compose ps
 ```
 *Expected*: `food-delivery-mysql`, `food-delivery-redis`, and `food-delivery-kafka` report `(healthy)`.
 
-### B. Build Project
+### Step 2: Build Project
 ```bash
 mvn clean install -DskipTests
 ```
 
-### C. Launch All 7 Microservices
-In separate terminal tabs or in background:
+### Step 3: Start Spring Cloud Config Server (:8888)
 ```bash
-# Terminal 1 / Background:
 java -jar config-server/target/config-server-1.0.0-SNAPSHOT.jar &
 sleep 5
+```
 
-# Terminal 2 / Background:
+### Step 4: Show Config Server Health & GitHub Configuration Retrieval
+```bash
+# 1. Config Server Actuator Health
+curl -s http://localhost:8888/actuator/health | jq .status
+# Expected: "UP"
+
+# 2. Config Server retrieving configuration from GitHub (https://github.com/mohdirfan2509/config-repo)
+curl -s http://localhost:8888/user-service/default | jq '{name: .name, source: .propertySources[0].name}'
+curl -s http://localhost:8888/food-service/default | jq '{name: .name, source: .propertySources[0].name}'
+```
+*Expected*: Responses show `source: "https://github.com/mohdirfan2509/config-repo.git/..."`, proving configuration is cloned and served directly from GitHub.
+
+### Step 5: Start Application Microservices & API Gateway
+```bash
 java -jar user-service/target/user-service-1.0.0-SNAPSHOT.jar &
 java -jar food-service/target/food-service-1.0.0-SNAPSHOT.jar &
 java -jar payment-service/target/payment-service-1.0.0-SNAPSHOT.jar &
 java -jar order-service/target/order-service-1.0.0-SNAPSHOT.jar &
 java -jar notification-service/target/notification-service-1.0.0-SNAPSHOT.jar &
 java -jar api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar &
+sleep 10
 ```
 
-### D. Verify All Services are Healthy
+### Step 6: Verify Service & API Gateway Health
 ```bash
-sleep 10
 for port in 8888 8081 8082 8084 8083 8085 8080; do
-  echo "Checking port $port: $(curl -s http://localhost:$port/actuator/health | jq .status)"
+  echo "Checking port $port: $(curl -s http://localhost:$port/actuator/health | jq -r .status)"
 done
 ```
-*Expected*: All return `"UP"`.
+*Expected*: All 7 services report `UP`.
 
 ---
 
@@ -64,7 +79,7 @@ curl -s -X POST http://localhost:8080/users/register \
 # Login Customer -> Store JWT
 CUSTOMER_TOKEN=$(curl -s -X POST http://localhost:8080/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"david@foodapp.com","password":"password123"}' | jq -r .token)
+  -d '{\"email\":\"david@foodapp.com\",\"password\":\"password123\"}' | jq -r .token)
 echo "Customer JWT: $CUSTOMER_TOKEN"
 ```
 
@@ -75,7 +90,7 @@ echo "Customer JWT: $CUSTOMER_TOKEN"
 # Login Admin -> Store JWT
 ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@foodapp.com","password":"Admin@1234"}' | jq -r .token)
+  -d '{\"email\":\"admin@foodapp.com\",\"password\":\"Admin@1234\"}' | jq -r .token)
 
 # Admin Creates Restaurant
 REST_ID=$(curl -s -X POST http://localhost:8080/restaurants \

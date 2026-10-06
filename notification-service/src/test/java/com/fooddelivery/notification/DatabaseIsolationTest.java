@@ -17,7 +17,10 @@ class DatabaseIsolationTest {
     @Test
     @DisplayName("Notification Service configuration must only use notificationdb and never other microservice databases")
     void testNotificationServiceDatabaseIsolation() throws Exception {
-        Path configPath = Paths.get("../config-repo/notification-service.yml");
+        Path configPath = Paths.get("../../config-repo/notification-service.yml");
+        if (!Files.exists(configPath)) {
+            configPath = Paths.get("../config-repo/notification-service.yml");
+        }
         if (!Files.exists(configPath)) {
             configPath = Paths.get("config-repo/notification-service.yml");
         }

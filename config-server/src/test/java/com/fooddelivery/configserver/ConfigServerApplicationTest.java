@@ -3,11 +3,10 @@ package com.fooddelivery.configserver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(properties = {
-        "spring.profiles.active=native",
-        "spring.cloud.config.server.native.search-locations=file:../config-repo,file:./config-repo"
+        "spring.cloud.config.server.git.uri=file:../config-repo",
+        "spring.cloud.config.server.git.clone-on-start=false"
 })
 class ConfigServerApplicationTest {
 
