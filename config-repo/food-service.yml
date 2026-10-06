@@ -1,0 +1,33 @@
+server:
+  port: ${FOOD_SERVICE_PORT:8082}
+
+spring:
+  application:
+    name: food-service
+  datasource:
+    url: ${FOOD_DB_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/fooddb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${FOOD_DB_USERNAME:root}
+    password: ${FOOD_DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+  cache:
+    type: redis
+    redis:
+      time-to-live: ${REDIS_CACHE_TTL:3600000}
+      cache-null-values: false
+
+# Cache TTL Configuration
+app:
+  cache:
+    ttl-minutes: ${CACHE_TTL_MINUTES:10}
